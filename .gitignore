@@ -1,0 +1,9 @@
+# Ignore everything in this directory
+*
+# Except these files
+!.gitignore 
+!prep.R
+!analyze.R
+!include.R
+!report-t.odt
+
