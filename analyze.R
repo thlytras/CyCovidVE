@@ -16,6 +16,13 @@ m <- list(
 # Obtaining predicted values for "fully unvaccinated"
 cat("Obtaining predicted values for \"fully unvaccinated\", please wait...\n")
 predm <- lapply(m, getEventsU)
+# Analysis restricted to the period of omicron circulation
+mo <- list(
+  death = glm(death ~ vaccStatus + agegrp + factor(isoweek), offset=log(n), data=subset(dat, agegrp!="05-11" & agegrp!="18-24" & date>="2022-1-3"), family="quasipoisson"),
+  hosp = glm(hosp ~ vaccStatus + agegrp + factor(isoweek), offset=log(n), data=subset(dat, date>="2022-1-3"), family="quasipoisson"),
+  case = glm(case ~ vaccStatus + agegrp + factor(isoweek), offset=log(n), data=subset(dat, date>="2022-1-3"), family="quasipoisson")
+)
+
 
 
 cat("Calculating all the rest...\n")
@@ -28,9 +35,9 @@ colnames(out$rtab1) <- colnames(out$rtab2) <- colnames(out$rtab3) <-
   c("Ανεμβολίαστοι", "Εμβολιασμένοι με 1 δόση", "Εμβολιασμένοι με 2 δόσεις", "Εμβολιασμένοι με 3 δόσεις")
 rownames(out$rtab1) <- rownames(out$rtab2) <- rownames(out$rtab3) <- 
   c("Πληθυσμός*", "Διάμεση ηλικία", 
-  "Κρούσματα", "Κρούσματα / 1000 πληθυσμού", "Κρούσματα / 1000 πληθυσμού, με ηλικιακή στάθμιση",
-  "Νοσηλείες", "Νοσηλείες / 100.000 πληθυσμού", "Νοσηλείες / 100.000 πληθυσμού, με ηλικιακή στάθμιση",
-  "Θάνατοι", "Θάνατοι / 100.000 πληθυσμού", "Θάνατοι / 100.000 πληθυσμού, με ηλικιακή στάθμιση")
+  "Κρούσματα", "Κρούσματα / 1000 πληθυσμού ανά μήνα", "Κρούσματα / 1000 πληθυσμού ανά μήνα, με ηλικιακή στάθμιση",
+  "Νοσηλείες", "Νοσηλείες / 100.000 πληθυσμού ανά μήνα", "Νοσηλείες / 100.000 πληθυσμού ανά μήνα, με ηλικιακή στάθμιση",
+  "Θάνατοι", "Θάνατοι / 100.000 πληθυσμού ανά μήνα", "Θάνατοι / 100.000 πληθυσμού ανά μήνα, με ηλικιακή στάθμιση")
 
 
 # Extract the Vaccine Effectiveness estimates from the quasi-Poisson fits
@@ -41,6 +48,7 @@ getVE <- function(m) {
   res
 }
 VE <- lapply(m, getVE)
+VEo <- lapply(mo, getVE)
 
 
 # Function to draw the Vaccine Effectiveness plot
@@ -60,6 +68,22 @@ out$VEplot <- function() { # width 8x6, pointsize 11
   axis(4, at=12, labels="Αποτελεσματικότητα\nεμβολίου (%)", las=2, lwd=0)
 }
 
+out$VEplotO <- function() { # width 8x6, pointsize 11
+  par(family="Fira Sans", mar=c(5,7,2,11), oma=c(0,3,0,3))
+  plot(0, type="n", bty="n", xlim=c(50,100), ylim=c(1,12), axes=F, ylab=NA, xlab="Αποτελεσματικότητα εμβολίου (%)", xaxs="i")
+  with(VEo$case, plotCI(est, 11:9, li=lo, ui=hi, err="x", add=TRUE, sfrac=0.00, lwd=2, pch=15, col=brewer.pal(4, "Spectral")[2:4]))
+  with(VEo$hosp, plotCI(est, 7:5, li=lo, ui=hi, err="x", add=TRUE, sfrac=0.00, lwd=2, pch=15, col=brewer.pal(4, "Spectral")[2:4]))
+  with(VEo$death, plotCI(est, 3:1, li=lo, ui=hi, err="x", add=TRUE, sfrac=0.00, lwd=2, pch=15, col=brewer.pal(4, "Spectral")[2:4]))
+  axis(1)
+  axis(2, at=c(11:9,7:5,3:1), labels=rep(c("1 δόση", "2 δόσεις", "3 δόσεις"),3), las=2, lwd=0)
+  mtext("Έναντι εργαστηριακά επιβεβαιωμένης νόσου COVID-19", side=2, at=12, las=2, adj=0, line=2, font=2, cex=1.0)
+  mtext("Έναντι νοσηλείας με COVID-19", side=2, at=8, las=2, adj=0, line=2, font=2, cex=1.0)
+  mtext("Έναντι θανάτου με COVID-19", side=2, at=4, las=2, adj=0, line=2, font=2, cex=1.0)
+  abline(v=100)
+  axis(4, at=c(3:1,7:5,11:9), labels=with(do.call(rbind, VEo), sprintf("%.1f (%.1f - %.1f)", est, lo, hi)), las=2, lwd=0)
+  axis(4, at=12, labels="Αποτελεσματικότητα\nεμβολίου (%)", las=2, lwd=0)
+}
+
 
 # Function to draw all K-M plots
 out$KMplot <- function() { # width 8x8, pointsize 11
@@ -72,6 +96,17 @@ out$KMplot <- function() { # width 8x8, pointsize 11
   plotAllKM("death", from="2021-11-2", title = "Θάνατοι COVID-19, από 1/11/2021 έως σήμερα")
 }
 
+
+# Function to draw observed - predicted events
+out$ObsPredEv <- function() { # width 8x8, pointsize 1
+  par(mfrow=c(3,1), family="Fira Sans", oma=c(0,2,0,2))
+  plotEvObsExp("death", col=brewer.pal(3, "Dark2")[1])
+  mtext("Αριθμός θανάτων ανά εβδμοάδα, παρατηρούμενος vs αναμενόμενος (χωρίς εμβολιασμό)", side=3, line=1, font=2)
+  plotEvObsExp("hosp", col=brewer.pal(3, "Dark2")[2])
+  mtext("Αριθμός νοσηλειών ανά εβδμοάδα, παρατηρούμενος vs αναμενόμενος (χωρίς εμβολιασμό)", side=3, line=1, font=2)
+  plotEvObsExp("case", col=brewer.pal(3, "Dark2")[3])
+  mtext("Αριθμός κρουσμάτων ανά εβδμοάδα, παρατηρούμενος vs αναμενόμενος (χωρίς εμβολιασμό)", side=3, line=1, font=2)
+}
 
 
 # Calculate various info "pieces" used in the .odt report

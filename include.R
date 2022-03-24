@@ -138,6 +138,20 @@ makeRatesTable <- function(from, to) {
   })
 }
 
+# Function to include a more detailed breakdown of rates by age group (not shown - to aid interpretation)
+ratesTableBreakdown <- function(from, to) {
+  NAto0 <- function(x) { x[is.na(x)] <- 0; x }
+  sapply(levels(cases$vaccStatus), function(v) {
+    s <- subset(cases, date>=from & date<=to & vaccStatus==v)
+    data.frame(
+      c.a = NAto0(tapply(s$case, s$agegrp, sum)),
+      h.a = NAto0(tapply(s$hosp, s$agegrp, sum)),
+      d.a = NAto0(tapply(s$death, s$agegrp, sum)),
+      n.a = NAto0(with(subset(vaccAggr2, date>=from & date<=to & vaccStatus==v), tapply(n, agegrp, sum)))
+    )
+  }, simplify=FALSE, USE.NAMES=TRUE)
+}
+
 
 # Function to plot a set of Kaplan-Meier curves (for any outcome, any period, etc)
 plotAllKM <- function(outc="case", from="2021-12-20", to=max(dat$date), show=1:3, adj=TRUE, inc=TRUE, alpha=0.1, title="") {
@@ -226,4 +240,29 @@ getEventsU <- function(m) {
   # For the variance of the sum: sum(var*x^2)
   # Overdispersion: max(1,sum(m$weights * m$residuals^2)/m$df.r)
 }
+
+
+# Function to draw a polygon (band) (e.g. to indicate confidence bands)
+plotBand <- function(x, y.lo, y.hi, col) {
+  if (length(x)!=length(y.lo) || length(x)!=length(y.hi))
+    stop("Arguments 'x', 'y.lo' and 'y.hi' must have the same length.")
+  polygon(c(x, rev(x)), c(y.lo, rev(y.hi)), border=NA, col=col)
+}
+
+
+# Function to plot observed vs predicted outcomes
+plotEvObsExp <- function(outc, ylab=NA, col="red") {
+  x <- predm[[outc]]
+  if (nrow(x)==nrow(dat)) x$isoweek <- dat$isoweek else x$isoweek <- subset(dat, agegrp!="05-11" & agegrp!="18-24")$isoweek
+  x$var <- x$var * x$x^2
+  x <- aggregate(x[,c("x","o","var")], x[,"isoweek",drop=FALSE], sum)
+  x$lo <- x$x - 1.96*sqrt(x$var)
+  x$hi <- x$x + 1.96*sqrt(x$var)
+  plot(x$x, ylim=c(0, max(x$hi)), type="l", col=col[1], lwd=2, bty="l", xaxt="n", xlab="Εβδομάδα", ylab=ylab)
+  plotBand(1:nrow(x), x$lo, x$hi, col=addalpha(col[1],0.1))
+  points(x$o, type="l", lwd=2)  
+  axis(1, at=which(x$isoweek %% 100 %in% c(1, 10,20,30,40,50)), labels=paste(substr(x$isoweek[which(x$isoweek %% 100 %in% c(1, 10,20,30,40,50))], 5,6), substr(x$isoweek[which(x$isoweek %% 100 %in% c(1, 10,20,30,40,50))], 1,4), sep="-"))
+  legend("topleft", col=c(col, "black"), c("Αναμενόμενος, αν όλοι ανεμβολίαστοι", "Παρατηρούμενος"), bty="n", lwd=2, seg.len=5, inset=c(0.01, 0))
+}
+
 
