@@ -6,13 +6,21 @@ source("include.R")
 
 # Read in the data and give handy variable names
 
-cases <- as.data.frame(read_excel("input/Line listing_CY.xlsx"))
-vacc <- as.data.frame(read_excel("input/VACCINATION DATA UNTIL 17 03 2022.xlsx"))
-pop <- as.data.frame(read_excel("input/Population 2019.xlsx", skip=1))
-pop <- pop[-c(1,nrow(pop)), ] 
+cases <- as.data.frame(read_excel("input/line listing_CY_08042022.xlsx"))
+vacc <- as.data.frame(read_excel("input/VACCINATION DATA UNTIL 07 04 2022.xlsx"))
+#vacc <- as.data.frame(read_excel("input/VACCINATION DATA UNTIL 17 03 2022.xlsx"))
+pop.st <- as.data.frame(read_excel("input/Population 2019.xlsx", skip=3, col_names=c("agegrp", "n")))
+pop.st <- pop.st[-nrow(pop.st), ] 
+pop.oay <- as.data.frame(read_excel("input/BENEFICIARIES 2022 By Age Group.xlsx", skip=3, col_names=c("agegrp", "n")))
+pop.oay <- pop.oay[-nrow(pop.oay),]
+
 names(cases) <- c("oid", "age", "dres", "dsamp", "hosp", "ddeath", "death", "cdeath", "vaccdate1", "vaccdate2", "vaccdate3", "vaccType.raw")
 names(vacc) <- c("date", "vaccType", "dose", "n", "agegrp")
-names(pop) <- c("agegrp", "n")
+
+
+# Use the population from the statistical service (not OAY)
+pop <- pop.st
+#pop <- data.frame(agegrp=pop.st$agegrp, n=pmax(pop.st$n, pop.oay$n))
 
 
 # Define correspondence with vaccine codes & other categorical variables
@@ -30,8 +38,8 @@ vacclbl <- function(i=NULL) {
 # Housekeeping and recoding variables
 
 # cases
-cases$hosp <- cases$hosp == sort(unique(cases$hosp))[1]
-cases$death <- cases$death == sort(unique(cases$death))[1]
+cases$hosp <- tolower(cases$hosp) %in% c("ναι", "yes")
+cases$death <- tolower(cases$death) %in% c("ναι", "yes")
 cases$dres <- as.Date(cases$dres)
 cases$dsamp <- as.Date(cases$dsamp)
 cases$ddeath <- as.Date(cases$ddeath)
@@ -63,8 +71,8 @@ cases$date[with(cases, as.integer(dres-dsamp)>31)] <- cases$dres[with(cases, as.
 vacc <- subset(vacc, date>="2020-12-27")
 vacc[with(vacc, which(dose==3 & date==min(date[dose==3]))),"dose"] <- 1   # Erroneous 3rd dose at 20/1/2020, probably is 1st...
 
-# Ugly TEMPORARY population hack to make the numbers have sense. TO BE REMOVED ONCE CORRECT VACC DATA RECEIVED
-pop$n[13:17] <- round(pop$n[13:17] * c(1.05, 1.12, 1.12, 1.2, 1.3))
+# # Ugly TEMPORARY population hack to make the numbers have sense. TO BE REMOVED ONCE CORRECT VACC DATA RECEIVED
+# pop$n[13:17] <- round(pop$n[13:17] * c(1.05, 1.12, 1.12, 1.2, 1.3))
 
 
 # Exclude cases vaccinated with other vaccines than the licensed ones.
